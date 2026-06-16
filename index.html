@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="theme-color" content="#1F1610"/>
+<title>Spot</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1F1610; --bg2:#2A1F17; --bg3:#352820;
+  --cream:#F5EDE2; --muted:#A8978A;
+  --orange:#E8703A; --orange-bg:rgba(232,112,58,0.15);
+  --sage:#8FA876; --sage-bg:rgba(143,168,118,0.18);
+  --border:rgba(245,237,226,0.08);
+  --r:18px; --rs:12px;
+}
+html,body{background:var(--bg);color:var(--cream);font-family:'Inter',sans-serif;height:100%;overflow:hidden}
+.display{font-family:'Fraunces',serif}
+#root{max-width:430px;margin:0 auto;height:100dvh;display:flex;flex-direction:column;overflow:hidden;position:relative}
+
+.screen{display:none;flex-direction:column;overflow:hidden;position:absolute;inset:0;background:var(--bg)}
+.screen.active{display:flex}
+
+/* ── top bar ── */
+.topbar{
+  position:absolute; top:0; left:0; right:0; z-index:5;
+  padding:max(18px,env(safe-area-inset-top)) 18px 14px;
+  display:flex; align-items:center; justify-content:space-between;
+  background:linear-gradient(to bottom, rgba(31,22,16,0.92), transparent);
+}
+.logo{display:flex; align-items:center; gap:8px;}
+.logo-mark{font-size:20px}
+.logo-text{font-family:'Fraunces',serif; font-size:19px; font-weight:600; letter-spacing:-0.01em}
+.profile-btn{
+  width:36px;height:36px;border-radius:50%;
+  background:var(--bg3); border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px; cursor:pointer;
+}
+
+/* ── map ── */
+.map-area{position:absolute; top:0; left:0; right:0; bottom:0; background:#15100B; overflow:hidden}
+.map-svg{position:absolute; inset:0; width:100%; height:100%}
+.pin{cursor:pointer; transition:transform 0.15s}
+.pin:active{transform:scale(0.92)}
+.pin-pulse{animation:pulse-ring 2.2s ease-out infinite}
+@keyframes pulse-ring{
+  0%{opacity:0.55; r:14}
+  70%{opacity:0; r:26}
+  100%{opacity:0; r:26}
+}
+
+/* filter chips */
+.filter-row{
+  position:absolute; top:78px; left:0; right:0; z-index:4;
+  display:flex; gap:8px; padding:0 18px; overflow-x:auto;
+}
+.filter-row::-webkit-scrollbar{display:none}
+.filter-chip{
+  background:rgba(42,31,23,0.92); backdrop-filter:blur(10px);
+  border:1px solid var(--border); border-radius:100px;
+  padding:8px 14px; font-size:12.5px; font-weight:500;
+  white-space:nowrap; cursor:pointer; transition:all 0.15s;
+  display:flex; align-items:center; gap:5px;
+}
+.filter-chip.active{background:var(--orange); color:#1F1610; border-color:var(--orange)}
+
+/* bottom sheet - spot detail */
+.sheet-overlay{
+  display:none; position:absolute; inset:0; z-index:20;
+  background:rgba(0,0,0,0.5); align-items:flex-end;
+}
+.sheet-overlay.open{display:flex}
+.sheet{
+  background:var(--bg2); border-radius:24px 24px 0 0;
+  width:100%; max-height:78%; overflow-y:auto;
+  border-top:1px solid var(--border);
+  padding-bottom:max(24px,env(safe-area-inset-bottom));
+}
+.sheet-handle{width:36px;height:4px;border-radius:2px;background:var(--border);margin:14px auto 0}
+.sheet-content{padding:18px 22px 0}
+.spot-photo{
+  width:100%; height:140px; border-radius:var(--r);
+  background:linear-gradient(135deg, #3A2A1C, #2A1F17);
+  margin-bottom:16px; display:flex; align-items:center; justify-content:center;
+  font-size:40px;
+}
+.spot-name{font-family:'Fraunces',serif; font-size:23px; font-weight:600; margin-bottom:6px}
+.spot-meta{font-size:13px; color:var(--muted); margin-bottom:14px}
+.tag-row{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px}
+.tag{
+  font-size:11.5px; font-weight:500; padding:5px 12px; border-radius:100px;
+  background:var(--bg3); color:var(--cream); border:1px solid var(--border);
+}
+.spot-note{font-size:14px; color:var(--cream); line-height:1.6; margin-bottom:20px}
+
+.active-here{
+  background:var(--sage-bg); border:1px solid rgba(143,168,118,0.3);
+  border-radius:var(--rs); padding:13px 14px; margin-bottom:16px;
+}
+.active-here-head{display:flex; align-items:center; gap:8px; margin-bottom:8px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--sage); animation:blink 1.6s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
+.active-here-label{font-size:12px; font-weight:600; color:var(--sage)}
+.friend-here{display:flex; align-items:center; gap:10px; padding:6px 0}
+.friend-avatar{width:30px;height:30px;border-radius:50%;background:var(--orange-bg);color:var(--orange);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
+.friend-here-text{font-size:13px}
+.friend-here-text strong{font-weight:600}
+.friend-here-note{font-size:12px; color:var(--muted)}
+
+.btn{display:block; width:100%; padding:15px; border-radius:var(--r); font-family:'Inter',sans-serif; font-size:15px; font-weight:600; cursor:pointer; border:none; transition:opacity 0.15s, transform 0.1s;}
+.btn:active{transform:scale(0.98)}
+.btn-primary{background:var(--orange); color:#1F1610}
+.btn-ghost{background:var(--bg3); color:var(--cream)}
+
+/* post flow */
+.post-screen{padding:max(60px,env(safe-area-inset-top)) 22px 24px; flex:1; display:flex; flex-direction:column; overflow-y:auto}
+.post-back{
+  width:36px;height:36px;border-radius:50%;background:var(--bg2);border:1px solid var(--border);
+  color:var(--cream); font-size:16px; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; margin-bottom:20px;
+}
+.post-eyebrow{font-size:12px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--orange); margin-bottom:10px}
+.post-title{font-family:'Fraunces',serif; font-size:26px; font-weight:600; margin-bottom:6px; line-height:1.2}
+.post-sub{font-size:14px; color:var(--muted); margin-bottom:24px; line-height:1.5}
+
+.selected-spot-card{
+  display:flex; align-items:center; gap:12px;
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--r);
+  padding:14px; margin-bottom:20px;
+}
+.selected-spot-icon{font-size:26px}
+.selected-spot-info{flex:1}
+.selected-spot-name{font-size:15px; font-weight:600}
+.selected-spot-sub{font-size:12px; color:var(--muted)}
+.change-spot{font-size:12px; color:var(--orange); font-weight:600; cursor:pointer}
+
+.form-label{font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:9px}
+.form-group{margin-bottom:20px}
+.time-options{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+.time-chip{
+  background:var(--bg2); border:1.5px solid var(--border); border-radius:var(--rs);
+  padding:13px 10px; text-align:center; cursor:pointer; font-size:13.5px; font-weight:500;
+  transition:all 0.15s;
+}
+.time-chip.sel{border-color:var(--orange); background:var(--orange-bg); color:var(--orange)}
+.note-input{
+  width:100%; background:var(--bg2); border:1px solid var(--border); border-radius:var(--rs);
+  color:var(--cream); font-family:'Inter',sans-serif; font-size:14.5px; padding:13px 14px;
+  outline:none; resize:none; min-height:80px;
+}
+.note-input:focus{border-color:var(--orange)}
+.note-input::placeholder{color:var(--muted)}
+.visibility-row{display:flex; gap:8px}
+.vis-chip{
+  flex:1; background:var(--bg2); border:1.5px solid var(--border); border-radius:var(--rs);
+  padding:12px 10px; text-align:center; cursor:pointer; font-size:13px; font-weight:500;
+  transition:all 0.15s;
+}
+.vis-chip.sel{border-color:var(--orange); background:var(--orange-bg); color:var(--orange)}
+
+.post-cta{margin-top:auto; padding-top:20px}
+
+/* posted confirmation */
+.confirm-wrap{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 32px}
+.confirm-icon{font-size:56px; margin-bottom:20px}
+.confirm-title{font-family:'Fraunces',serif; font-size:24px; font-weight:600; margin-bottom:10px}
+.confirm-sub{font-size:14px; color:var(--muted); line-height:1.6; margin-bottom:32px}
+
+/* FAB */
+.fab{
+  position:absolute; bottom:max(24px,env(safe-area-inset-bottom)); right:20px; z-index:6;
+  display:flex; align-items:center; gap:8px;
+  background:var(--orange); color:#1F1610; border:none; border-radius:100px;
+  padding:15px 20px; font-family:'Inter',sans-serif; font-weight:600; font-size:14.5px;
+  cursor:pointer; box-shadow:0 6px 24px rgba(232,112,58,0.4); transition:transform 0.1s;
+}
+.fab:active{transform:scale(0.95)}
+
+/* feed toggle (friends activity strip) */
+.activity-strip{
+  position:absolute; bottom:max(24px,env(safe-area-inset-bottom)); left:18px; z-index:6;
+  display:flex; align-items:center; gap:10px;
+  background:rgba(42,31,23,0.94); backdrop-filter:blur(12px);
+  border:1px solid var(--border); border-radius:100px;
+  padding:8px 14px 8px 6px; max-width:230px; cursor:pointer;
+}
+.activity-avatars{display:flex; margin-right:2px}
+.act-avatar{
+  width:26px; height:26px; border-radius:50%; background:var(--sage-bg); color:var(--sage);
+  display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700;
+  border:2px solid var(--bg2); margin-left:-8px;
+}
+.act-avatar:first-child{margin-left:0}
+.activity-text{font-size:12px; font-weight:500; line-height:1.3}
+.activity-text strong{color:var(--sage)}
+/* ── auth screen ── */
+.auth-wrap{flex:1; display:flex; flex-direction:column; padding:0 26px; padding-top:max(70px,env(safe-area-inset-top))}
+.auth-logo{font-size:48px; margin-bottom:20px}
+.auth-title{font-family:'Fraunces',serif; font-size:30px; font-weight:600; margin-bottom:8px; line-height:1.2}
+.auth-sub{font-size:14px; color:var(--muted); margin-bottom:32px; line-height:1.55}
+.auth-input{
+  width:100%; background:var(--bg2); border:1px solid var(--border); border-radius:var(--rs);
+  color:var(--cream); font-family:'Inter',sans-serif; font-size:15px; padding:14px 15px;
+  outline:none; margin-bottom:12px;
+}
+.auth-input:focus{border-color:var(--orange)}
+.auth-input::placeholder{color:var(--muted)}
+.auth-toggle{text-align:center; margin-top:20px; font-size:13.5px; color:var(--muted)}
+.auth-toggle span{color:var(--orange); font-weight:600; cursor:pointer}
+.auth-error{
+  background:rgba(232,112,58,0.12); border:1px solid rgba(232,112,58,0.3);
+  border-radius:var(--rs); padding:11px 13px; font-size:13px; color:var(--orange);
+  margin-bottom:14px; display:none;
+}
+.auth-error.show{display:block}
+
+/* ── profile screen ── */
+.profile-header{
+  padding:max(60px,env(safe-area-inset-top)) 24px 24px;
+  display:flex; flex-direction:column; align-items:center; text-align:center;
+}
+.profile-avatar{
+  width:84px; height:84px; border-radius:50%; background:var(--orange-bg);
+  display:flex; align-items:center; justify-content:center; font-size:38px;
+  margin-bottom:14px; border:2px solid var(--orange);
+}
+.profile-name{font-family:'Fraunces',serif; font-size:24px; font-weight:600; margin-bottom:3px}
+.profile-username{font-size:13px; color:var(--muted); margin-bottom:12px}
+.profile-bio{font-size:13.5px; color:var(--cream); line-height:1.55; max-width:280px; margin-bottom:18px}
+.profile-stats{display:flex; gap:28px; margin-bottom:8px}
+.profile-stat{text-align:center}
+.profile-stat-num{font-family:'Fraunces',serif; font-size:20px; font-weight:600; color:var(--orange)}
+.profile-stat-label{font-size:11px; color:var(--muted); margin-top:2px}
+
+.profile-body{padding:0 22px 100px}
+.profile-section-title{font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin:24px 0 12px}
+.friend-row{
+  display:flex; align-items:center; gap:12px;
+  background:var(--bg2); border-radius:var(--rs); padding:11px 13px;
+  border:1px solid var(--border); margin-bottom:8px;
+}
+.friend-row-avatar{
+  width:36px; height:36px; border-radius:50%; background:var(--orange-bg); color:var(--orange);
+  display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; flex-shrink:0;
+}
+.friend-row-name{font-size:14px; font-weight:500; flex:1}
+.friend-row-username{font-size:12px; color:var(--muted)}
+
+.fav-spot-row{
+  display:flex; align-items:center; gap:12px;
+  background:var(--bg2); border-radius:var(--rs); padding:11px 13px;
+  border:1px solid var(--border); margin-bottom:8px; cursor:pointer;
+}
+.fav-spot-icon{font-size:20px}
+.fav-spot-name{font-size:14px; font-weight:500; flex:1}
+
+.empty-state{font-size:13px; color:var(--muted); text-align:center; padding:18px 0}
+
+.back-row{padding:14px 18px 0; display:flex; justify-content:space-between; align-items:center}
+.back-btn{
+  width:36px;height:36px;border-radius:50%;background:var(--bg2);border:1px solid var(--border);
+  color:var(--cream); font-size:16px; display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.signout-link{font-size:13px; color:var(--orange); font-weight:600; cursor:pointer}
+
+.add-friend-row{display:flex; gap:8px; margin-bottom:18px}
+.add-friend-input{flex:1; background:var(--bg2); border:1px solid var(--border); border-radius:var(--rs); color:var(--cream); font-family:'Inter',sans-serif; font-size:14px; padding:11px 13px; outline:none}
+.add-friend-btn{background:var(--orange); color:#1F1610; border:none; border-radius:var(--rs); padding:0 18px; font-weight:600; font-size:13px; cursor:pointer}
+
+</style>
+</head>
+<body>
+<div id="root">
+
+  <!-- ════════ MAP SCREEN ════════ -->
+  <div class="screen active" id="screen-map">
+    <div class="topbar">
+      <div class="logo"><div class="logo-mark">📍</div><div class="logo-text display">Spot</div></div>
+      <div class="profile-btn" onclick="openProfile()">👤</div>
+    </div>
+
+    <div class="filter-row">
+      <div class="filter-chip active" data-filter="all">All spots</div>
+      <div class="filter-chip" data-filter="outdoor">🏃 Outdoors</div>
+      <div class="filter-chip" data-filter="study">📚 Study-friendly</div>
+      <div class="filter-chip" data-filter="social">🎉 Social</div>
+      <div class="filter-chip" data-filter="free">🆓 Free</div>
+      <div class="filter-chip" data-filter="cheap">💸 Cheap eats</div>
+    </div>
+
+    <div class="map-area" id="map-area">
+      <svg class="map-svg" id="map-svg" viewBox="0 0 400 700"></svg>
+    </div>
+
+    <div class="activity-strip" onclick="alert('In the full app this opens your friend activity feed!')">
+      <div class="activity-avatars">
+        <div class="act-avatar">M</div>
+        <div class="act-avatar">J</div>
+        <div class="act-avatar">+2</div>
+      </div>
+      <div class="activity-text"><strong>4 friends</strong> are out right now</div>
+    </div>
+
+    <button class="fab" onclick="openPostFlow()">📌 I'll be here</button>
+  </div>
+
+  <!-- ════════ SPOT DETAIL SHEET ════════ -->
+  <div class="sheet-overlay" id="spot-sheet" onclick="closeSheetIfBg(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-content" id="sheet-content"></div>
+    </div>
+  </div>
+
+  <!-- ════════ POST FLOW ════════ -->
+  <div class="screen" id="screen-post">
+    <div class="post-screen">
+      <button class="post-back" onclick="closePostFlow()">←</button>
+
+      <div id="post-step-pick">
+        <div class="post-eyebrow">Step 1 of 3</div>
+        <h1 class="post-title display">Where will you be?</h1>
+        <p class="post-sub">Pick a spot from the map, or choose one of your usual favorites below.</p>
+        <div id="pick-spot-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen" id="screen-post-details">
+    <div class="post-screen">
+      <button class="post-back" onclick="backToPick()">←</button>
+      <div class="post-eyebrow">Step 2 of 3</div>
+      <h1 class="post-title display">When and what's the vibe?</h1>
+      <p class="post-sub">Friends will see this on the map while it's active.</p>
+
+      <div class="selected-spot-card" id="selected-spot-card"></div>
+
+      <div class="form-group">
+        <div class="form-label">When</div>
+        <div class="time-options">
+          <div class="time-chip" onclick="selTime(this)">Right now → 1hr</div>
+          <div class="time-chip" onclick="selTime(this)">This afternoon</div>
+          <div class="time-chip" onclick="selTime(this)">This evening</div>
+          <div class="time-chip" onclick="selTime(this)">Custom time</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label">Add a note (optional)</div>
+        <textarea class="note-input" id="note-input" placeholder="e.g. studying for orgo, come distract me"></textarea>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label">Who can see this</div>
+        <div class="visibility-row">
+          <div class="vis-chip sel" onclick="selVis(this)">Friends only</div>
+          <div class="vis-chip" onclick="selVis(this)">Close friends</div>
+        </div>
+      </div>
+
+      <div class="post-cta">
+        <button class="btn btn-primary" onclick="submitPost()">Post it</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen" id="screen-confirm">
+    <div class="confirm-wrap">
+      <div class="confirm-icon">📍</div>
+      <div class="confirm-title display">You're on the map</div>
+      <div class="confirm-sub" id="confirm-text">Your friends can see you're at Daily Grind Coffee until 5pm. Hope someone joins!</div>
+      <button class="btn btn-primary" onclick="returnHome()" style="max-width:240px">Back to map</button>
+    </div>
+  </div>
+
+  <!-- ════════ AUTH SCREEN ════════ -->
+  <div class="screen" id="screen-auth">
+    <div class="auth-wrap">
+      <div class="auth-logo">📍</div>
+      <div class="auth-title display" id="auth-title">Welcome to Spot</div>
+      <div class="auth-sub" id="auth-sub">Find your people at real places. Sign in or create an account to get started.</div>
+
+      <div class="auth-error" id="auth-error"></div>
+
+      <input class="auth-input" id="auth-display-name" placeholder="Your name" style="display:none"/>
+      <input class="auth-input" id="auth-username" placeholder="Pick a username" style="display:none"/>
+      <input class="auth-input" id="auth-email" type="email" placeholder="Email"/>
+      <input class="auth-input" id="auth-password" type="password" placeholder="Password"/>
+
+      <button class="btn btn-primary" id="auth-submit-btn" onclick="handleAuthSubmit()" style="margin-top:8px">Sign in</button>
+
+      <div class="auth-toggle" id="auth-toggle-text">
+        Don't have an account? <span onclick="toggleAuthMode()">Sign up</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ PROFILE SCREEN ════════ -->
+  <div class="screen" id="screen-profile">
+    <div class="scroll-area" style="overflow-y:auto; height:100%">
+      <div class="back-row">
+        <div class="back-btn" onclick="closeProfile()">←</div>
+        <div class="signout-link" onclick="handleSignOut()">Sign out</div>
+      </div>
+      <div class="profile-header">
+        <div class="profile-avatar" id="profile-avatar">🙂</div>
+        <div class="profile-name display" id="profile-name">—</div>
+        <div class="profile-username" id="profile-username">@—</div>
+        <div class="profile-bio" id="profile-bio"></div>
+        <div class="profile-stats">
+          <div class="profile-stat"><div class="profile-stat-num" id="stat-friends">0</div><div class="profile-stat-label">Friends</div></div>
+          <div class="profile-stat"><div class="profile-stat-num" id="stat-favorites">0</div><div class="profile-stat-label">Favorites</div></div>
+          <div class="profile-stat"><div class="profile-stat-num" id="stat-posts">0</div><div class="profile-stat-label">Posts</div></div>
+        </div>
+      </div>
+
+      <div class="profile-body">
+        <div class="profile-section-title">Add a friend</div>
+        <div class="add-friend-row">
+          <input class="add-friend-input" id="add-friend-username" placeholder="Enter their username"/>
+          <button class="add-friend-btn" onclick="handleAddFriend()">Add</button>
+        </div>
+
+        <div class="profile-section-title">Friends</div>
+        <div id="friends-list"><div class="empty-state">No friends yet — add some above!</div></div>
+
+        <div class="profile-section-title">Favorite spots</div>
+        <div id="favorites-list"><div class="empty-state">Tap the heart on any spot to save it here</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// SUPABASE CONFIG — paste your project URL + anon key below
+// Get these from: Supabase dashboard → Settings → API
+// ════════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://nqyfvirvtzbpjyoowouh.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xeWZ2aXJ2dHpicGp5b293b3VoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2MjU2ODYsImV4cCI6MjA5NzIwMTY4Nn0.qqxDeqDgSGIn5E3H8Y_BDz6uSGQRRC3uYTA_9n7yD0U';
+
+let supabase = null;
+let currentUser = null;
+let currentProfile = null;
+let authMode = 'signin'; // 'signin' or 'signup'
+
+function initSupabase() {
+  if (SUPABASE_URL.includes('YOUR_') || SUPABASE_ANON_KEY.includes('YOUR_')) {
+    console.warn('Supabase not configured yet — paste your URL and anon key into the SUPABASE_URL / SUPABASE_ANON_KEY constants.');
+    return;
+  }
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  checkExistingSession();
+}
+
+async function checkExistingSession() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    await loadProfile();
+  }
+}
+
+// ── Auth screen logic ──
+function toggleAuthMode() {
+  authMode = authMode === 'signin' ? 'signup' : 'signin';
+  const isSignup = authMode === 'signup';
+  document.getElementById('auth-title').textContent = isSignup ? 'Create your account' : 'Welcome back';
+  document.getElementById('auth-sub').textContent = isSignup
+    ? 'Set up your profile so friends can find you on Spot.'
+    : 'Sign in to see what your friends are up to.';
+  document.getElementById('auth-display-name').style.display = isSignup ? 'block' : 'none';
+  document.getElementById('auth-username').style.display = isSignup ? 'block' : 'none';
+  document.getElementById('auth-submit-btn').textContent = isSignup ? 'Create account' : 'Sign in';
+  document.getElementById('auth-toggle-text').innerHTML = isSignup
+    ? `Already have an account? <span onclick="toggleAuthMode()">Sign in</span>`
+    : `Don't have an account? <span onclick="toggleAuthMode()">Sign up</span>`;
+  hideAuthError();
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+function hideAuthError() {
+  document.getElementById('auth-error').classList.remove('show');
+}
+
+async function handleAuthSubmit() {
+  if (!supabase) { showAuthError("Supabase isn't connected yet — add your URL and key in the code."); return; }
+  hideAuthError();
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+
+  if (!email || !password) { showAuthError('Please fill in both email and password.'); return; }
+
+  if (authMode === 'signup') {
+    const displayName = document.getElementById('auth-display-name').value.trim();
+    const username = document.getElementById('auth-username').value.trim().toLowerCase().replace(/\s+/g, '');
+    if (!displayName || !username) { showAuthError('Please fill in your name and username.'); return; }
+
+    const { data, error } = await supabase.auth.signUp({
+      email, password,
+      options: { data: { display_name: displayName, username: username } }
+    });
+    if (error) { showAuthError(error.message); return; }
+    currentUser = data.user;
+    await loadProfile();
+  } else {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { showAuthError(error.message); return; }
+    currentUser = data.user;
+    await loadProfile();
+  }
+}
+
+async function handleSignOut() {
+  await supabase.auth.signOut();
+  currentUser = null;
+  currentProfile = null;
+  closeProfile();
+  showScreen('screen-map');
+  // In a real app you might want to force re-auth here depending on your flow
+}
+
+// ── Profile data loading ──
+async function loadProfile() {
+  if (!supabase || !currentUser) return;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', currentUser.id)
+    .single();
+  currentProfile = profile;
+
+  showScreen('screen-map');
+  renderProfileHeader();
+  await loadFriends();
+  await loadFavorites();
+}
+
+function renderProfileHeader() {
+  if (!currentProfile) return;
+  document.getElementById('profile-avatar').textContent = currentProfile.avatar_emoji || '🙂';
+  document.getElementById('profile-name').textContent = currentProfile.display_name;
+  document.getElementById('profile-username').textContent = '@' + currentProfile.username;
+  document.getElementById('profile-bio').textContent = currentProfile.bio || 'No bio yet';
+}
+
+async function loadFriends() {
+  if (!supabase || !currentUser) return;
+  const { data: friendships } = await supabase
+    .from('friends')
+    .select('*, profile1:profiles!friends_user_id_1_fkey(*), profile2:profiles!friends_user_id_2_fkey(*)')
+    .or(`user_id_1.eq.${currentUser.id},user_id_2.eq.${currentUser.id}`)
+    .eq('status', 'accepted');
+
+  const list = document.getElementById('friends-list');
+  if (!friendships || friendships.length === 0) {
+    list.innerHTML = '<div class="empty-state">No friends yet — add some above!</div>';
+    document.getElementById('stat-friends').textContent = '0';
+    return;
+  }
+
+  document.getElementById('stat-friends').textContent = friendships.length;
+  list.innerHTML = friendships.map(f => {
+    const friend = f.user_id_1 === currentUser.id ? f.profile2 : f.profile1;
+    return `
+      <div class="friend-row">
+        <div class="friend-row-avatar">${friend.avatar_emoji || friend.display_name[0]}</div>
+        <div style="flex:1">
+          <div class="friend-row-name">${friend.display_name}</div>
+          <div class="friend-row-username">@${friend.username}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function handleAddFriend() {
+  const username = document.getElementById('add-friend-username').value.trim().toLowerCase();
+  if (!username || !supabase || !currentUser) return;
+
+  const { data: target } = await supabase.from('profiles').select('id').eq('username', username).single();
+  if (!target) { alert('No user found with that username.'); return; }
+  if (target.id === currentUser.id) { alert("That's you!"); return; }
+
+  const { error } = await supabase.from('friends').insert({
+    user_id_1: currentUser.id,
+    user_id_2: target.id,
+    status: 'accepted' // simplified for v1 — instant friend, no request/accept flow yet
+  });
+
+  if (error) { alert('Could not add friend: ' + error.message); return; }
+  document.getElementById('add-friend-username').value = '';
+  await loadFriends();
+}
+
+async function loadFavorites() {
+  if (!supabase || !currentUser) return;
+  const { data: favorites } = await supabase
+    .from('favorite_spots')
+    .select('*')
+    .eq('user_id', currentUser.id);
+
+  const list = document.getElementById('favorites-list');
+  if (!favorites || favorites.length === 0) {
+    list.innerHTML = '<div class="empty-state">Tap the heart on any spot to save it here</div>';
+    document.getElementById('stat-favorites').textContent = '0';
+    return;
+  }
+
+  document.getElementById('stat-favorites').textContent = favorites.length;
+  list.innerHTML = favorites.map(f => {
+    const spotData = SPOTS.find(s => s.id === f.spot_id);
+    return `
+      <div class="fav-spot-row" onclick="closeProfile(); openSpotSheet(${f.spot_id})">
+        <div class="fav-spot-icon">${spotData ? spotData.icon : '📍'}</div>
+        <div class="fav-spot-name">${f.spot_name}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Screen navigation helpers ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function openProfile() {
+  if (!currentUser) {
+    showScreen('screen-auth');
+  } else {
+    showScreen('screen-profile');
+  }
+}
+
+function closeProfile() {
+  showScreen('screen-map');
+}
+
+// ── Real Naperville spots ──
+// Coordinates are real lat/lng, normalized to map x/y for the SVG view.
+// Lat range ~41.762–41.800 (north=top), Lng range ~-88.158––88.148 (east=right)
+function project(lat, lng) {
+  const latMin = 41.762, latMax = 41.800;
+  const lngMin = -88.158, lngMax = -88.148;
+  const x = ((lng - lngMin) / (lngMax - lngMin)) * 380 + 10;
+  const y = ((latMax - lat) / (latMax - latMin)) * 680 + 10;
+  return { x, y };
+}
+
+const RAW_SPOTS = [
+  {
+    id:1, name:'Nike Sports Complex', icon:'🏃',
+    lat:41.7983, lng:-88.1528,
+    address:'1520 N Mill St, Naperville, IL 60563',
+    tags:['outdoor','social','free'],
+    note:"42 acres of trails, fields, and pickleball/tennis courts. Great for a pickup game or just getting outside with friends.",
+    hours:'Open dawn – dusk',
+    active:[]
+  },
+  {
+    id:2, name:'Sparrow Coffee', icon:'☕',
+    lat:41.770688, lng:-88.150617,
+    address:'120 Water St Ste 110, Naperville, IL 60540',
+    tags:['study','social'],
+    note:'Busy, buzzing downtown coffee shop right off the Riverwalk. Reliable wifi and always full of people — good for studying or just hanging out.',
+    hours:'6:00am – 6:00pm daily',
+    active:[{name:'Maya',note:'studying, come say hi'}]
+  },
+  {
+    id:3, name:'Naper Settlement', icon:'🏛️',
+    lat:41.76944, lng:-88.15361,
+    address:'523 S Webster St, Naperville, IL 60540',
+    tags:['social','free'],
+    note:'13-acre outdoor history museum downtown. Hosts concerts, festivals, and seasonal events worth checking the calendar for.',
+    hours:'Tue–Sat 10am–4pm, Sun 1pm–4pm, closed Mon',
+    active:[]
+  },
+  {
+    id:4, name:"Potter's Place", icon:'🌮',
+    lat:41.7717, lng:-88.1486,
+    address:'29 W Jefferson Ave, Naperville, IL 60540',
+    tags:['social','cheap'],
+    note:'Mexican restaurant with the biggest patio downtown by day, turns into Two-Nine Martini Lounge upstairs Fri & Sat nights.',
+    hours:'Sun–Thu 11am–1am, Fri–Sat 11am–2am',
+    active:[{name:'Jordan',note:'grabbing tacos, free to chat'}]
+  },
+  {
+    id:5, name:'Centennial Beach', icon:'🏖️',
+    lat:41.77139, lng:-88.15667,
+    address:'500 W Jackson Ave, Naperville, IL 60540',
+    tags:['outdoor','social','free'],
+    note:'Historic quarry turned swimming hole. Zero-depth entry, water up to 15ft, sand beach, and a concessions stand. Seasonal — open Memorial Day through Labor Day.',
+    hours:'Seasonal, check napervilleparks.org for hours',
+    active:[]
+  },
+];
+
+const SPOTS = RAW_SPOTS.map(s => {
+  const p = project(s.lat, s.lng);
+  return { ...s, x: p.x, y: p.y };
+});
+
+const FAVORITES = [
+  { name:'Sparrow Coffee', icon:'☕', sub:"You've posted here 4 times" },
+  { name:"Potter's Place", icon:'🌮', sub:"You've posted here 2 times" },
+  { name:'Centennial Beach', icon:'🏖️', sub:'New favorite' },
+];
+
+let currentFilter = 'all';
+let pickedSpot = null;
+let selectedTime = null;
+let selectedVis = 'Friends only';
+
+function renderMap() {
+  const svg = document.getElementById('map-svg');
+  svg.innerHTML = '';
+
+  // subtle background paths to feel like streets
+  const bg = `<path d="M0,200 Q200,180 400,220" stroke="rgba(245,237,226,0.04)" stroke-width="2" fill="none"/>
+              <path d="M50,0 Q80,300 60,700" stroke="rgba(245,237,226,0.04)" stroke-width="2" fill="none"/>
+              <path d="M0,450 Q200,470 400,440" stroke="rgba(245,237,226,0.04)" stroke-width="2" fill="none"/>
+              <path d="M280,0 Q300,350 320,700" stroke="rgba(245,237,226,0.04)" stroke-width="2" fill="none"/>`;
+  svg.innerHTML += bg;
+
+  const filtered = SPOTS.filter(s => currentFilter === 'all' || s.tags.includes(currentFilter));
+
+  filtered.forEach(spot => {
+    const isLive = spot.active.length > 0;
+    const pinColor = isLive ? '#8FA876' : '#E8703A';
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','pin');
+    g.onclick = () => openSpotSheet(spot.id);
+
+    let html = '';
+    if (isLive) {
+      html += `<circle cx="${spot.x}" cy="${spot.y}" r="14" fill="${pinColor}" class="pin-pulse"/>`;
+    }
+    html += `
+      <circle cx="${spot.x}" cy="${spot.y}" r="17" fill="${pinColor}" opacity="0.18"/>
+      <circle cx="${spot.x}" cy="${spot.y}" r="11" fill="${pinColor}"/>
+      <text x="${spot.x}" y="${spot.y+4}" text-anchor="middle" font-size="13" fill="#1F1610">${spot.icon}</text>
+    `;
+    g.innerHTML = html;
+    svg.appendChild(g);
+  });
+}
+
+document.querySelectorAll('.filter-chip').forEach(chip => {
+  chip.onclick = () => {
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    currentFilter = chip.dataset.filter;
+    renderMap();
+  };
+});
+
+renderMap();
+
+// ── Spot detail sheet ──
+function openSpotSheet(id) {
+  const spot = SPOTS.find(s => s.id === id);
+  const content = document.getElementById('sheet-content');
+
+  let activeHtml = '';
+  if (spot.active.length > 0) {
+    activeHtml = `
+      <div class="active-here">
+        <div class="active-here-head"><div class="live-dot"></div><div class="active-here-label">${spot.active.length} friend${spot.active.length>1?'s':''} here now</div></div>
+        ${spot.active.map(f => `
+          <div class="friend-here">
+            <div class="friend-avatar">${f.name[0]}</div>
+            <div class="friend-here-text"><strong>${f.name}</strong><div class="friend-here-note">${f.note}</div></div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  content.innerHTML = `
+    <div class="spot-photo">${spot.icon}</div>
+    <div class="spot-name display">${spot.name}</div>
+    <div class="spot-meta">${spot.hours}<br/>${spot.address}</div>
+    <div class="tag-row">${spot.tags.map(t => `<div class="tag">${tagLabel(t)}</div>`).join('')}</div>
+    ${activeHtml}
+    <div class="spot-note">${spot.note}</div>
+    <button class="btn btn-primary" onclick="closeSheet(); openPostFlow(${spot.id})">📌 I'll be here</button>
+  `;
+  document.getElementById('spot-sheet').classList.add('open');
+}
+
+function tagLabel(t) {
+  const map = { study:'📚 Study-friendly', social:'🎉 Social', free:'🆓 Free', cheap:'💸 Cheap', outdoor:'🏃 Outdoors' };
+  return map[t] || t;
+}
+
+function closeSheet() { document.getElementById('spot-sheet').classList.remove('open'); }
+function closeSheetIfBg(e) { if (e.target === document.getElementById('spot-sheet')) closeSheet(); }
+
+// ── Post flow ──
+function openPostFlow(spotId) {
+  document.getElementById('screen-map').classList.remove('active');
+  document.getElementById('screen-post').classList.add('active');
+  renderPickList();
+  if (spotId) {
+    const spot = SPOTS.find(s => s.id === spotId);
+    pickSpot(spot.name, spot.icon);
+  }
+}
+
+function renderPickList() {
+  const list = document.getElementById('pick-spot-list');
+  list.innerHTML = `<div class="form-label" style="margin-bottom:10px">Your favorites</div>`;
+  FAVORITES.forEach(f => {
+    list.innerHTML += `
+      <div class="selected-spot-card" style="cursor:pointer; margin-bottom:10px" onclick="pickSpot('${f.name}','${f.icon}')">
+        <div class="selected-spot-icon">${f.icon}</div>
+        <div class="selected-spot-info"><div class="selected-spot-name">${f.name}</div><div class="selected-spot-sub">${f.sub}</div></div>
+        <div style="color:var(--orange); font-size:18px">→</div>
+      </div>
+    `;
+  });
+  list.innerHTML += `
+    <div class="form-label" style="margin:18px 0 10px">Or browse the map</div>
+    <button class="btn btn-ghost" onclick="closePostFlow()">← Back to map to pick a spot</button>
+  `;
+}
+
+function pickSpot(name, icon) {
+  pickedSpot = { name, icon };
+  document.getElementById('screen-post').classList.remove('active');
+  document.getElementById('screen-post-details').classList.add('active');
+  document.getElementById('selected-spot-card').innerHTML = `
+    <div class="selected-spot-icon">${icon}</div>
+    <div class="selected-spot-info"><div class="selected-spot-name">${name}</div><div class="selected-spot-sub">Selected spot</div></div>
+    <div class="change-spot" onclick="backToPick()">Change</div>
+  `;
+}
+
+function backToPick() {
+  document.getElementById('screen-post-details').classList.remove('active');
+  document.getElementById('screen-post').classList.add('active');
+}
+
+function selTime(el) {
+  document.querySelectorAll('.time-chip').forEach(c => c.classList.remove('sel'));
+  el.classList.add('sel');
+  selectedTime = el.textContent;
+}
+
+function selVis(el) {
+  document.querySelectorAll('.vis-chip').forEach(c => c.classList.remove('sel'));
+  el.classList.add('sel');
+  selectedVis = el.textContent;
+}
+
+function submitPost() {
+  if (!selectedTime) { alert('Pick a time first!'); return; }
+  document.getElementById('screen-post-details').classList.remove('active');
+  document.getElementById('screen-confirm').classList.add('active');
+  const note = document.getElementById('note-input').value.trim();
+  document.getElementById('confirm-text').textContent =
+    `Your friends can see you're at ${pickedSpot.name} — ${selectedTime}.` +
+    (note ? ` "${note}"` : '') + ` Hope someone joins!`;
+}
+
+function closePostFlow() {
+  document.getElementById('screen-post').classList.remove('active');
+  document.getElementById('screen-map').classList.add('active');
+}
+
+function returnHome() {
+  document.getElementById('screen-confirm').classList.remove('active');
+  document.getElementById('screen-map').classList.add('active');
+  document.getElementById('note-input').value = '';
+  selectedTime = null;
+  document.querySelectorAll('.time-chip').forEach(c => c.classList.remove('sel'));
+}
+
+initSupabase();
+</script>
+</body>
+</html>
