@@ -444,7 +444,7 @@ html,body{background:var(--bg);color:var(--cream);font-family:'Inter',sans-serif
 const SUPABASE_URL = 'https://nqyfvirvtzbpjyoowouh.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xeWZ2aXJ2dHpicGp5b293b3VoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2MjU2ODYsImV4cCI6MjA5NzIwMTY4Nn0.qqxDeqDgSGIn5E3H8Y_BDz6uSGQRRC3uYTA_9n7yD0U';
 
-let supabase = null;
+let db = null;
 let currentUser = null;
 let currentProfile = null;
 let authMode = 'signin'; // 'signin' or 'signup'
@@ -454,12 +454,12 @@ function initSupabase() {
     console.warn('Supabase not configured yet — paste your URL and anon key into the SUPABASE_URL / SUPABASE_ANON_KEY constants.');
     return;
   }
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   checkExistingSession();
 }
 
 async function checkExistingSession() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await db.auth.getSession();
   if (session) {
     currentUser = session.user;
     await loadProfile();
@@ -493,7 +493,7 @@ function hideAuthError() {
 }
 
 async function handleAuthSubmit() {
-  if (!supabase) { showAuthError("Supabase isn't connected yet — add your URL and key in the code."); return; }
+  if (!db) { showAuthError("Supabase isn't connected yet — add your URL and key in the code."); return; }
   hideAuthError();
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
@@ -505,7 +505,7 @@ async function handleAuthSubmit() {
     const username = document.getElementById('auth-username').value.trim().toLowerCase().replace(/\s+/g, '');
     if (!displayName || !username) { showAuthError('Please fill in your name and username.'); return; }
 
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await db.auth.signUp({
       email, password,
       options: { data: { display_name: displayName, username: username } }
     });
@@ -513,7 +513,7 @@ async function handleAuthSubmit() {
     currentUser = data.user;
     await loadProfile();
   } else {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await db.auth.signInWithPassword({ email, password });
     if (error) { showAuthError(error.message); return; }
     currentUser = data.user;
     await loadProfile();
@@ -521,7 +521,7 @@ async function handleAuthSubmit() {
 }
 
 async function handleSignOut() {
-  await supabase.auth.signOut();
+  await db.auth.signOut();
   currentUser = null;
   currentProfile = null;
   closeProfile();
@@ -531,9 +531,9 @@ async function handleSignOut() {
 
 // ── Profile data loading ──
 async function loadProfile() {
-  if (!supabase || !currentUser) return;
+  if (!db || !currentUser) return;
 
-  const { data: profile } = await supabase
+  const { data: profile } = await db
     .from('profiles')
     .select('*')
     .eq('id', currentUser.id)
@@ -555,8 +555,8 @@ function renderProfileHeader() {
 }
 
 async function loadFriends() {
-  if (!supabase || !currentUser) return;
-  const { data: friendships } = await supabase
+  if (!db || !currentUser) return;
+  const { data: friendships } = await db
     .from('friends')
     .select('*, profile1:profiles!friends_user_id_1_fkey(*), profile2:profiles!friends_user_id_2_fkey(*)')
     .or(`user_id_1.eq.${currentUser.id},user_id_2.eq.${currentUser.id}`)
@@ -586,13 +586,13 @@ async function loadFriends() {
 
 async function handleAddFriend() {
   const username = document.getElementById('add-friend-username').value.trim().toLowerCase();
-  if (!username || !supabase || !currentUser) return;
+  if (!username || !db || !currentUser) return;
 
-  const { data: target } = await supabase.from('profiles').select('id').eq('username', username).single();
+  const { data: target } = await db.from('profiles').select('id').eq('username', username).single();
   if (!target) { alert('No user found with that username.'); return; }
   if (target.id === currentUser.id) { alert("That's you!"); return; }
 
-  const { error } = await supabase.from('friends').insert({
+  const { error } = await db.from('friends').insert({
     user_id_1: currentUser.id,
     user_id_2: target.id,
     status: 'accepted' // simplified for v1 — instant friend, no request/accept flow yet
@@ -604,8 +604,8 @@ async function handleAddFriend() {
 }
 
 async function loadFavorites() {
-  if (!supabase || !currentUser) return;
-  const { data: favorites } = await supabase
+  if (!db || !currentUser) return;
+  const { data: favorites } = await db
     .from('favorite_spots')
     .select('*')
     .eq('user_id', currentUser.id);
