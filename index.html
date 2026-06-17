@@ -653,8 +653,14 @@ function closeProfile() {
 function project(lat, lng) {
   const latMin = 41.762, latMax = 41.800;
   const lngMin = -88.158, lngMax = -88.148;
+  // Keep pins out of the top chrome (topbar + filter row, ~140px of a 700 viewBox)
+  // and bottom chrome (activity strip + FAB, ~90px of a 700 viewBox) so the
+  // FAB/activity-strip (z-index:6) never visually sit on top of a clickable pin.
+  const topPadding = 150;
+  const bottomPadding = 110;
+  const usableHeight = 700 - topPadding - bottomPadding;
   const x = ((lng - lngMin) / (lngMax - lngMin)) * 380 + 10;
-  const y = ((latMax - lat) / (latMax - latMin)) * 680 + 10;
+  const y = ((latMax - lat) / (latMax - latMin)) * usableHeight + topPadding;
   return { x, y };
 }
 
